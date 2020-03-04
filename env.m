@@ -2,9 +2,9 @@ function value = env(key, default)
     % ENV - read environment variables
     %
     % Reads values from three sources in the following order:
-    %  1) System environment (getenv)
+    %  1) ".env" file on the path
     %  2) MATLAB preferences (getpref) in the 'env' group
-    %  3) ".env" file on the path
+    %  3) System environment (getenv)
     %
     % Examples:
     %  dbHost = env('DATABASE_HOST', '127.0.0.1');
@@ -30,17 +30,17 @@ function value = env(key, default)
     % DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     % OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-    value = readfromsystemenv(key);
-    if ~isempty(value)
-        return
-    end
-
-    value = readfrommatlabenv(key);
-    if ~isempty(value)
-        return
-    end
-
     value = readfrominifile(key);
+    if ~isempty(value)
+        return
+    end
+
+    value = readfrommatlabpref(key);
+    if ~isempty(value)
+        return
+    end
+
+    value = readfromsystemenv(key);
     if ~isempty(value)
         return
     end
@@ -60,7 +60,7 @@ function value = readfromsystemenv(key)
 end
 
 
-function value = readfrommatlabenv(key)
+function value = readfrommatlabpref(key)
     % read from MATLAB preferences "env" group
     if ispref('env', key)
         value = getpref('env', key);
