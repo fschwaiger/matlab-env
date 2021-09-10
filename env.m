@@ -1,4 +1,4 @@
-function value = env(key, default)
+function value = env(key, default, useAutoEnvrep)
     % ENV - read environment variables
     %
     % Reads values from three sources in the following order:
@@ -13,7 +13,7 @@ function value = env(key, default)
     %
     % See also: getenv, getpref
 
-    % Copyright 2019 Florian Schwaiger <f.schwaiger@tum.de>
+    % Copyright 2021 Florian Schwaiger <f.schwaiger@tum.de>
     %
     % Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
     % associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -30,25 +30,40 @@ function value = env(key, default)
     % DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     % OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-    value = readfrominifile(key);
-    if ~isempty(value)
+    if nargin > 2 && not(useAutoEnvrep)
+        eval("envrep = @(x) x;");
+    end
+
+    narginchk(0, 2);
+    if nargin == 0
+        value = envrep(readfrominifile("*", pwd));
         return
     end
 
-    value = readfrommatlabpref(key);
-    if ~isempty(value)
+    value = envrep(readfromsystemenv(key));
+    if not(strcmp(value, ""))
         return
     end
 
-    value = readfromsystemenv(key);
-    if ~isempty(value)
+    value = envrep(readfrommatlabpref(key));
+    if not(strcmp(value, ""))
+        return
+    end
+
+    value = envrep(readfrominifile(key, pwd));
+    if not(strcmp(value, ""))
         return
     end
 
     if nargout > 0 && nargin > 1
-        value = default;
+        if isstring(key)
+            value = string(default);
+        else
+            value = default;
+        end
     elseif nargout > 0
-        error('Environment value "%s" undefined, no default given.', key);
+        error('env:missing', ...
+            'Environment value "%s" undefined, no default given.', key);
     end
 
 end
@@ -57,6 +72,10 @@ end
 function value = readfromsystemenv(key)
     % try to read from system env variables
     value = getenv(key);
+
+    if isstring(key)
+        value = string(value);
+    end
 end
 
 
@@ -64,30 +83,45 @@ function value = readfrommatlabpref(key)
     % read from MATLAB preferences "env" group
     if ispref('env', key)
         value = getpref('env', key);
+    elseif isstring(key)
+        value = "";
     else
-        value = [];
+        value = '';
     end
 end
 
 
-function value = readfrominifile(key)
+function value = readfrominifile(key, folder)
     % get the value from an ".env" file
-    value = [];
-    if ~exist('.env', 'file')
+    value = '';
+    envFile = fullfile(folder, '.env');
+    if not(exist(envFile, 'file'))
+        parent = fileparts(folder);
+        if not(strcmp(parent, folder))
+            value = readfrominifile(key, parent);
+        end
         return
     end
 
-    modified = lastmodified('.env');
+    modified = lastmodified(envFile);
     persistent envCache
     if isempty(envCache) || envCache.modified < modified
         envCache = struct( ...
             'modified', modified, ...
-            'content', loadini('.env') ...
+            'content', loadini(envFile) ...
         );
     end
 
-    if isfield(envCache.content, key)
+    if strcmp(key, "*")
+        value = envCache.content;
+    elseif isfield(envCache.content, key)
         value = envCache.content.(key);
+    end
+
+    if isstring(key) && isstruct(value)
+        value = structfun(@string, value, 'UniformOutput', false);
+    elseif isstring(key)
+        value = string(value);
     end
 end
 
@@ -125,25 +159,9 @@ function parent = appendlinevalue(parent, line)
         % ignore unset value and comments
     elseif any(text(1) == '"''')
         % extract until the closing quote character
-        parent.(key) = strtok(text, text(1));
-    elseif text(1) == '{'
-        % extract until the closing quote character
-        parent.(key) = strsplit(strtok(text(2:end), '}'), ',');
+        parent.(key) = extractBefore(text(2:end), regexpPattern("(?<!\\)" + text(1)));
     else
-        % try to coerce to a numeric value
-        parent.(key) = parsenum(text);
+        % apply
+        parent.(key) = text;
     end
 end
-
-
-function value = parsenum(text)
-    % parse string to number, but do not evaluate classes
-    value = text;
-    if ~exist(text, 'class')
-        [numerical, isNumeric] = str2num(text); %#ok<ST2NM>
-        if isNumeric
-            value = numerical;
-        end
-    end
-end
-
