@@ -42,6 +42,7 @@ With no defaults given for username and password, the subsequent calls will rais
 value defined for username or password. This ensures you specify concisely whether you expect to be able to
 continue if no value has been defined. Of course you can specify an empty default value.
 
+You are also allowed to specify dependent environment variables using `$VARNAME`, `${VARNAME}`, or `${VARNAME:default}` syntax.
 
 Example `.env` file
 -------------------
@@ -55,4 +56,6 @@ THIS_BECOMES_A_LIST = {first,second,and third item}
 THIS_BECOMES_A_DOUBLE = 42
 THIS_STAYS_A_STRING = "42"
 THIS_ALSO_STAYS_A_STRING = '42'
+
+TEST_URL = https://${CI_HOST_NAME}/${CI_PROJECT_PATH}/-/blob/${CI_COMMIT_SHA:HEAD}/path/to/file
 ```
