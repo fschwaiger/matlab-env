@@ -30,27 +30,35 @@ function value = env(key, default, useAutoEnvrep)
     % DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     % OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-    if nargin > 2 && not(useAutoEnvrep)
-        eval("envrep = @(x) x;");
+    arguments
+        key {mustBeA(key, {'string', 'char'})} = '*'
+        default {mustBeA(default, {'string', 'char'})} = ''
+        useAutoEnvrep (1,1) logical = true
     end
 
-    narginchk(0, 2);
-    if nargin == 0
-        value = envrep(readfrominifile("*", pwd));
+    function value = maybeEnvrep(value)
+        if useAutoEnvrep
+            value = envrep(value);
+        end
+    end
+
+    if strcmp(key, '*')
+        value = readfrominifile("*", pwd);
+        value = structfun(@maybeEnvrep, value, "Uniform", false);
         return
     end
 
-    value = envrep(readfromsystemenv(key));
+    value = maybeEnvrep(readfromsystemenv(key));
     if not(strcmp(value, ""))
         return
     end
 
-    value = envrep(readfrommatlabpref(key));
+    value = maybeEnvrep(readfrommatlabpref(key));
     if not(strcmp(value, ""))
         return
     end
 
-    value = envrep(readfrominifile(key, pwd));
+    value = maybeEnvrep(readfrominifile(key, pwd));
     if not(strcmp(value, ""))
         return
     end
@@ -59,7 +67,7 @@ function value = env(key, default, useAutoEnvrep)
         if isstring(key)
             value = string(default);
         else
-            value = default;
+            value = char(default);
         end
     elseif nargout > 0
         error('env:missing', ...
@@ -81,12 +89,10 @@ end
 
 function value = readfrommatlabpref(key)
     % read from MATLAB preferences "env" group
-    if ispref('env', key)
-        value = getpref('env', key);
-    elseif isstring(key)
-        value = "";
-    else
-        value = '';
+    value = char(getpref('env', key, ''));
+
+    if isstring(key)
+        value = string(value);
     end
 end
 
@@ -99,6 +105,8 @@ function value = readfrominifile(key, folder)
         parent = fileparts(folder);
         if not(strcmp(parent, folder))
             value = readfrominifile(key, parent);
+        elseif strcmp(key, "*")
+            value = struct();
         end
         return
     end

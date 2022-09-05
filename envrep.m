@@ -11,8 +11,8 @@ function value = envrep(value)
     %   $NAME_WITH_UNDERSCORES
     %
     % This tool is autmoatically used with env() as well,
-    % allowing you to have environment variables that 
-    % point to other environment variables, especially 
+    % allowing you to have environment variables that
+    % point to other environment variables, especially
     % in your .env configuration file.
     %
     % See also env
@@ -55,6 +55,6 @@ function value = envrep(value)
     if wasChar
         value = char(value);
     elseif wasCell
-        calue = cellstr(value);
+        value = cellstr(value);
     end
 end
