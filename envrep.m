@@ -38,7 +38,7 @@ function value = envrep(value)
     wasCell = iscell(value);
     value = string(value);
 
-    for iValue = 1:numel(value)
+    for iValue = find(contains(value, "$"))
         [vars, starts, ends] = regexp(value(iValue), "\$(?<name>\w[\w\d_]*)|\$\{(?<name>\w[\w\d_]*)(?<default>:.*?)?\}", "names", "start", "end");
 
         for k = numel(vars):-1:1

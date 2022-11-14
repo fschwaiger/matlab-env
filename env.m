@@ -43,8 +43,7 @@ function value = env(key, default, useAutoEnvrep)
     end
 
     if strcmp(key, '*')
-        value = readfrominifile("*", pwd);
-        value = structfun(@maybeEnvrep, value, "Uniform", false);
+        value = readfromdotenvfile("*", pwd);
         return
     end
 
@@ -53,12 +52,12 @@ function value = env(key, default, useAutoEnvrep)
         return
     end
 
-    value = maybeEnvrep(readfrommatlabpref(key));
+    value = maybeEnvrep(readfromdotenvfile(key, pwd));
     if not(strcmp(value, ""))
         return
     end
 
-    value = maybeEnvrep(readfrominifile(key, pwd));
+    value = maybeEnvrep(readfrommatlabpref(key));
     if not(strcmp(value, ""))
         return
     end
@@ -73,9 +72,7 @@ function value = env(key, default, useAutoEnvrep)
         error('env:missing', ...
             'Environment value "%s" undefined, no default given.', key);
     end
-
 end
-
 
 function value = readfromsystemenv(key)
     % try to read from system env variables
@@ -86,44 +83,48 @@ function value = readfromsystemenv(key)
     end
 end
 
-
 function value = readfrommatlabpref(key)
     % read from MATLAB preferences "env" group
-    value = char(getpref('env', key, ''));
+
+    persistent prefCache
+    if isempty(prefCache)
+        prefCache = getpref('env');
+    end
+    
+    value = '';
+    if isfield(prefCache, key)
+        value = char(prefCache.(key));
+    end
 
     if isstring(key)
         value = string(value);
     end
 end
 
-
-function value = readfrominifile(key, folder)
+function value = readfromdotenvfile(key, folder)
     % get the value from an ".env" file
+
     value = '';
-    envFile = fullfile(folder, '.env');
-    if not(exist(envFile, 'file'))
-        parent = fileparts(folder);
-        if not(strcmp(parent, folder))
-            value = readfrominifile(key, parent);
-        elseif strcmp(key, "*")
-            value = struct();
+
+    persistent dotenvCache
+    if isempty(dotenvCache)
+        file = fullfile(folder, '.env');
+        if not(exist(file, 'file'))
+            parent = fileparts(folder);
+            if not(strcmp(parent, folder))
+                value = readfromdotenvfile(key, parent);
+            elseif strcmp(key, "*")
+                value = struct();
+            end
+            return
         end
-        return
+        dotenvCache = loaddotenv(file);
     end
 
-    modified = lastmodified(envFile);
-    persistent envCache
-    if isempty(envCache) || envCache.modified < modified
-        envCache = struct( ...
-            'modified', modified, ...
-            'content', loadini(envFile) ...
-        );
-    end
-
-    if strcmp(key, "*")
-        value = envCache.content;
-    elseif isfield(envCache.content, key)
-        value = envCache.content.(key);
+    if key == "*"
+        value = dotenvCache;
+    elseif isfield(dotenvCache, key)
+        value = dotenvCache.(key);
     end
 
     if isstring(key) && isstruct(value)
@@ -131,17 +132,19 @@ function value = readfrominifile(key, folder)
     elseif isstring(key)
         value = string(value);
     end
+
+    if key == "*"
+        vars = structfun(@(v) {regexp(v, "\$(?<name>\w[\w\d_]*)|\$\{(?<name>\w[\w\d_]*)(:.*?)?\}", "names")}, value);
+        vars = [vars{:}];
+        vars = unique([vars.name]);
+        vars = setdiff(vars, fieldnames(value));
+        for name = vars
+            value.(name) = env(name, "", false);
+        end
+    end
 end
 
-
-function modified = lastmodified(filename)
-    % finds out when a file was modified last
-    info = dir(filename);
-    modified = info(1).datenum;
-end
-
-
-function value = loadini(filename)
+function value = loaddotenv(filename)
     % read and parse a file in KEY=VALUE format
     lines = strsplit(fileread(filename), newline);
     value = struct();
@@ -156,7 +159,6 @@ function value = loadini(filename)
         end
     end
 end
-
 
 function parent = appendlinevalue(parent, line)
     [key, valueWithEqualsChar] = strtok(line, '=');
